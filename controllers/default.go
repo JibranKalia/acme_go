@@ -29,7 +29,6 @@ func (this *MainController) activeContent(view string) {
 func (this *MainController) Get() {
 	this.activeContent("index")
 
-	//******** This page requires login
 	sess := this.GetSession("acme")
 	if sess == nil {
 		this.Redirect("/user/login/home", 302)
