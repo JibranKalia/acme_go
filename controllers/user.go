@@ -161,12 +161,12 @@ func sendVerification(email, u string) bool {
 	host := "smtp.gmail.com"
 	port := 587
 	msg := gomail.NewMessage()
-	msg.SetAddressHeader("From", "jibran.kalia@gmail.com", "Kalia Corporation")
+	msg.SetAddressHeader("From", "acmecorp@gmail.com", "ACME Corporation")
 	msg.SetHeader("To", email)
-	msg.SetHeader("Subject", "Account Verification for Kalia Corporation")
+	msg.SetHeader("Subject", "Account Verification for ACME Corporation")
 	msg.SetBody("text/html", "To verify your account, please click on the link: <a href=\""+link+
-		"\">"+link+"</a><br><br>Best Regards,<br>Kalia Corporation")
-	m := gomail.NewMailer(host, "jibran.kalia@gmail.com", "1Jib2gm3", port)
+		"\">"+link+"</a><br><br>Best Regards,<br>ACME Corporation")
+	m := gomail.NewMailer(host, "youraccount@gmail.com", "YourPassword", port)
 	if err := m.Send(msg); err != nil {
 		return false
 	}
