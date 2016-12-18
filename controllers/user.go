@@ -189,3 +189,184 @@ func (this *MainController) Verify() {
 		}
 	}
 }
+
+func (this *MainController) Profile() {
+	this.activeContent("user/profile")
+
+	sess := this.GetSession("acme")
+	if sess == nil {
+		this.Redirect("/user/login/home", 302)
+		return
+	}
+	m := sess.(map[string]interface{})
+
+	flash := beego.NewFlash()
+
+	var x pk.PasswordHash
+
+	x.Hash = make([]byte, 32)
+	x.Salt = make([]byte, 16)
+
+	o := orm.NewOrm()
+	o.Using("default")
+	user := models.AuthUser{Email: m["username"].(string)}
+	err := o.Read(&user, "Email")
+	if err == nil {
+		// scan in the password hash/salt
+		if x.Hash, err = hex.DecodeString(user.Password[:64]); err != nil {
+			fmt.Println("ERROR:", err)
+		}
+		if x.Salt, err = hex.DecodeString(user.Password[64:]); err != nil {
+			fmt.Println("ERROR:", err)
+		}
+	} else {
+		flash.Error("Internal error")
+		flash.Store(&this.Controller)
+		return
+	}
+
+	defer func(this *MainController, user *models.AuthUser) {
+		this.Data["First"] = user.First
+		this.Data["Last"] = user.Last
+		this.Data["Email"] = user.Email
+	}(this, &user)
+	if this.Ctx.Input.Method() == "POST" {
+		first := this.GetString("first")
+		last := this.GetString("last")
+		email := this.GetString("email")
+		current := this.GetString("current")
+		password := this.GetString("password")
+		password2 := this.GetString("password2")
+		valid := validation.Validation{}
+		valid.Required(first, "first")
+		valid.Email(email, "email")
+		valid.Required(current, "current")
+		if valid.HasErrors() {
+			errormap := []string{}
+			for _, err := range valid.Errors {
+				errormap = append(errormap, "Validation failed on "+err.Key+": "+err.Message+"\n")
+			}
+			this.Data["Errors"] = errormap
+			return
+		}
+
+		if password != "" {
+			valid.MinSize(password, 6, "password")
+			valid.Required(password2, "password2")
+			if valid.HasErrors() {
+				errormap := []string{}
+				for _, err := range valid.Errors {
+					errormap = append(errormap, "Validation failed on "+err.Key+": "+err.Message+"\n")
+				}
+				this.Data["Errors"] = errormap
+				return
+			}
+
+			if password != password2 {
+				flash.Error("Passwords don't match")
+				flash.Store(&this.Controller)
+				return
+			}
+			h := pk.HashPassword(password)
+
+			// Convert password hash to string
+			user.Password = hex.EncodeToString(h.Hash) + hex.EncodeToString(h.Salt)
+		}
+
+		//******** Compare submitted password with database
+		if !pk.MatchPassword(current, &x) {
+			flash.Error("Bad current password")
+			flash.Store(&this.Controller)
+			return
+		}
+
+		//******** Save user info to database
+		user.First = first
+		user.Last = last
+		user.Email = email
+
+		_, err := o.Update(&user)
+		if err == nil {
+			flash.Notice("Profile updated")
+			flash.Store(&this.Controller)
+			m["username"] = email
+		} else {
+			flash.Error("Internal error")
+			flash.Store(&this.Controller)
+			return
+		}
+	}
+
+}
+
+func (this *MainController) Remove() {
+	this.activeContent("user/remove")
+
+	//******** This page requires login
+	sess := this.GetSession("acme")
+	if sess == nil {
+		this.Redirect("/user/login/home", 302)
+		return
+	}
+	m := sess.(map[string]interface{})
+
+	if this.Ctx.Input.Method() == "POST" {
+		current := this.GetString("current")
+		valid := validation.Validation{}
+		valid.Required(current, "current")
+		if valid.HasErrors() {
+			errormap := []string{}
+			for _, err := range valid.Errors {
+				errormap = append(errormap, "Validation failed on "+err.Key+": "+err.Message+"\n")
+			}
+			this.Data["Errors"] = errormap
+			return
+		}
+
+		flash := beego.NewFlash()
+
+		//******** Read password hash from database
+		var x pk.PasswordHash
+
+		x.Hash = make([]byte, 32)
+		x.Salt = make([]byte, 16)
+
+		o := orm.NewOrm()
+		o.Using("default")
+		user := models.AuthUser{Email: m["username"].(string)}
+		err := o.Read(&user, "Email")
+		if err == nil {
+			// scan in the password hash/salt
+			if x.Hash, err = hex.DecodeString(user.Password[:64]); err != nil {
+				fmt.Println("ERROR:", err)
+			}
+			if x.Salt, err = hex.DecodeString(user.Password[64:]); err != nil {
+				fmt.Println("ERROR:", err)
+			}
+		} else {
+			flash.Error("Internal error")
+			flash.Store(&this.Controller)
+			return
+		}
+
+		//******** Compare submitted password with database
+		if !pk.MatchPassword(current, &x) {
+			flash.Error("Bad current password")
+			flash.Store(&this.Controller)
+			return
+		}
+
+		//******** Delete user record
+		_, err = o.Delete(&user)
+		if err == nil {
+			flash.Notice("Your account is deleted.")
+			flash.Store(&this.Controller)
+			this.DelSession("acme")
+			this.Redirect("/notice", 302)
+		} else {
+			flash.Error("Internal error")
+			flash.Store(&this.Controller)
+			return
+		}
+	}
+}
