@@ -20,8 +20,8 @@ func init() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
 }
+
 func main() {
 	beego.BConfig.WebConfig.Session.SessionOn = true
 	beego.Run()
